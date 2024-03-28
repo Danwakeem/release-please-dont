@@ -1,0 +1,57 @@
+name: Deploy
+
+run-name: Deploy - ${{ startsWith(github.event.head_commit.message, 'chore(main)') && 'prod' || github.event.inputs.stage == '' && 'dev' || github.event.inputs.stage }}
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+  packages: read
+
+on:
+  push:
+    branches:
+      - main
+      - 'rel_*'
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Stage to deploy to - for example, "dev" or "prod"'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - dev1
+          - qa
+          - qa1
+          - test
+          - prod
+
+env:
+  RELEASE_PREFIX: 'chore(main): release'
+  NODE_AUTH_TOKEN: ${{ github.token }}
+
+jobs:
+  deploy:
+    name: Deploy - ${{ startsWith(github.event.head_commit.message, 'chore(main)') && 'prod' || github.event.inputs.stage == '' && 'dev' || github.event.inputs.stage }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'yarn'
+          registry-url: 'https://npm.pkg.github.com'
+          cache-dependency-path: ./yarn.lock
+
+      - name: Deploy - ${{ github.event.inputs.stage == '' && 'dev' || github.event.inputs.stage }}
+        if: ${{ !startsWith(github.event.head_commit.message, env.RELEASE_PREFIX) && github.event.inputs.stage }}
+        run: echo "Deploying Dev"
+
+      - uses: google-github-actions/release-please-action@v4
+        id: release
+
+      - name: Deploy - Production
+        if: ${{ steps.release.outputs.releases_created }}
+        run: echo "Deploying prod"
